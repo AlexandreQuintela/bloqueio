@@ -1,39 +1,53 @@
 import 'package:flutter/material.dart';
 
-import 'position.dart';
+import 'jogador.dart';
+import 'posicao.dart';
 
+export 'jogador.dart';
+
+/// Enumerador mantido para compatibilidade com o código anterior.
 enum GoalSide { north, south, east, west }
 
-class Player {
-  Player({
-    required this.id,
-    required this.name,
-    required this.color,
-    required this.goalSide,
-    required this.startPosition,
-    required this.wallsRemaining,
-    this.isBot = false,
-  }) : position = startPosition;
+typedef Player = Jogador;
 
-  final int id;
-  final String name;
-  final Color color;
-  final GoalSide goalSide;
-  final Position startPosition;
-  int wallsRemaining;
-  Position position;
-  final bool isBot;
-
-  bool get hasWallsAvailable => wallsRemaining > 0;
-
-  void useWall() {
-    if (wallsRemaining <= 0) {
-      throw StateError('Player $name is out of walls');
-    }
-    wallsRemaining -= 1;
+LadoMeta goalSideToLadoMeta(GoalSide side) {
+  switch (side) {
+    case GoalSide.north:
+      return LadoMeta.norte;
+    case GoalSide.south:
+      return LadoMeta.sul;
+    case GoalSide.east:
+      return LadoMeta.leste;
+    case GoalSide.west:
+      return LadoMeta.oeste;
   }
+}
 
-  void returnWall() {
-    wallsRemaining += 1;
+GoalSide ladoMetaToGoalSide(LadoMeta lado) {
+  switch (lado) {
+    case LadoMeta.norte:
+      return GoalSide.north;
+    case LadoMeta.sul:
+      return GoalSide.south;
+    case LadoMeta.leste:
+      return GoalSide.east;
+    case LadoMeta.oeste:
+      return GoalSide.west;
   }
+}
+
+extension PlayerCompatibility on Jogador {
+  bool get isBot => ehAutomatizado;
+  GoalSide get goalSide => ladoMetaToGoalSide(ladoMeta);
+  Posicao get position => posicaoAtual;
+  set position(Posicao value) => moverPara(value);
+  bool get hasWallsAvailable => possuiParedesDisponiveis;
+  int get wallsRemaining => paredesRestantes;
+  set wallsRemaining(int value) => paredesRestantes = value;
+  Posicao get startPosition => posicaoInicial;
+  Color get color => cor;
+  String get name => nome;
+
+  void useWall() => consumirParede();
+  void returnWall() => devolverParede();
 }

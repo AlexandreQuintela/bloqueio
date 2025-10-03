@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/position.dart';
 import '../models/quoridor_game.dart';
 import '../models/wall.dart';
+import '../models/player.dart';
 
 /// Widget responsável por renderizar o tabuleiro do Quoridor com destaques,
 /// pré-visualizações de paredes e peões dos jogadores.

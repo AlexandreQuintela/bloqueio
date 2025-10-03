@@ -1,32 +1,15 @@
-import 'package:flutter/foundation.dart';
+import 'posicao.dart';
 
-@immutable
-class Position {
-  const Position(this.row, this.col);
+export 'posicao.dart';
 
-  final int row;
-  final int col;
+/// Mantém a nomenclatura anterior `Position` para compatibilidade.
+typedef Position = Posicao;
 
-  Position translate(int dRow, int dCol) => Position(row + dRow, col + dCol);
-
-  bool isWithinBounds(int size) =>
-      row >= 0 && row < size && col >= 0 && col < size;
-
-  bool isAdjacent(Position other) {
-    final dRow = (row - other.row).abs();
-    final dCol = (col - other.col).abs();
-    return dRow + dCol == 1;
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is Position && other.row == row && other.col == col;
-  }
-
-  @override
-  int get hashCode => row.hashCode ^ (col.hashCode << 16);
-
-  @override
-  String toString() => 'Position(row: $row, col: $col)';
+extension PositionCompatibility on Posicao {
+  int get row => linha;
+  int get col => coluna;
+  Position translate(int dRow, int dCol) =>
+      deslocar(deltaLinha: dRow, deltaColuna: dCol);
+  bool isWithinBounds(int size) => estaDentroDosLimites(size);
+  bool isAdjacent(Posicao other) => ehAdjacente(other);
 }
