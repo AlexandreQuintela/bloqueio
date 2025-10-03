@@ -252,24 +252,30 @@ class QuoridorGame {
   }
 
   List<Position> _initialPositions(int count) {
+    final lastIndex = boardSize - 1;
+    final center = boardSize ~/ 2;
     switch (count) {
       case 2:
-        return const <Position>[Position(0, 4), Position(8, 4)];
+        return <Position>[Position(lastIndex, center), Position(0, center)];
       case 3:
-        return const <Position>[Position(0, 4), Position(8, 4), Position(4, 0)];
+        return <Position>[
+          Position(lastIndex, center),
+          Position(0, center),
+          Position(center, 0),
+        ];
       default:
-        return const <Position>[
-          Position(0, 4),
-          Position(8, 4),
-          Position(4, 0),
-          Position(4, 8),
+        return <Position>[
+          Position(lastIndex, center),
+          Position(0, center),
+          Position(center, 0),
+          Position(center, lastIndex),
         ];
     }
   }
 
   List<Color> _playerColors(int count) {
     const palette = <Color>[
-      Color(0xFF00B2A9),
+      Color(0xFFF2EFE2),
       Color(0xFFF2545B),
       Color(0xFF2E294E),
       Color(0xFFFFA630),
@@ -280,13 +286,13 @@ class QuoridorGame {
   List<GoalSide> _goalSides(int count) {
     switch (count) {
       case 2:
-        return const <GoalSide>[GoalSide.south, GoalSide.north];
+        return const <GoalSide>[GoalSide.north, GoalSide.south];
       case 3:
-        return const <GoalSide>[GoalSide.south, GoalSide.north, GoalSide.east];
+        return const <GoalSide>[GoalSide.north, GoalSide.south, GoalSide.east];
       default:
         return const <GoalSide>[
-          GoalSide.south,
           GoalSide.north,
+          GoalSide.south,
           GoalSide.east,
           GoalSide.west,
         ];

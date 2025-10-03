@@ -254,14 +254,17 @@ class QuoridorBoard extends StatelessWidget {
           height: hitHeight,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTapDown: allowWallInteraction
-                ? (_) => onWallPreview?.call(placement)
+            onTap: allowWallInteraction
+                ? () {
+                    if (previewWall != null && previewWall == placement) {
+                      onWallCommit?.call(placement);
+                    } else {
+                      onWallPreview?.call(placement);
+                    }
+                  }
                 : null,
             onTapCancel: allowWallInteraction
                 ? () => onWallPreviewCancel?.call()
-                : null,
-            onTapUp: allowWallInteraction
-                ? (_) => onWallCommit?.call(placement)
                 : null,
             child: Center(
               child: SizedBox(

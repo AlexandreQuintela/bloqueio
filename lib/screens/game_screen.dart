@@ -273,7 +273,10 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
       _showFeedback('Movimento inválido nessa rodada.');
       return;
     }
-    setState(_refreshHighlights);
+    setState(() {
+      _previewWallPlacement = null;
+      _refreshHighlights();
+    });
     _maybeShowWinnerDialog();
     _scheduleBotTurn();
   }
@@ -448,7 +451,8 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
+                    Flexible(
+                      flex: 5,
                       child: LayoutBuilder(
                         builder: (context, innerConstraints) {
                           final dimension = math.min(
@@ -456,7 +460,7 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                             innerConstraints.maxWidth,
                           );
                           final boardSize = dimension.isFinite && dimension > 0
-                              ? dimension * 0.94
+                              ? dimension * 0.95
                               : 360.0;
 
                           return Center(
@@ -470,12 +474,36 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                       ),
                     ),
                     const SizedBox(width: 24),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 280),
-                      child: _buildPlayerBanner(
-                        theme,
-                        currentPlayer,
-                        isCompact: true,
+                    Flexible(
+                      flex: 3,
+                      child: LayoutBuilder(
+                        builder: (context, panelConstraints) {
+                          final maxWidth = panelConstraints.maxWidth;
+                          double panelWidth;
+                          if (!maxWidth.isFinite || maxWidth <= 0) {
+                            panelWidth = 280.0;
+                          } else if (maxWidth < 200.0) {
+                            panelWidth = maxWidth;
+                          } else {
+                            panelWidth = math.min(maxWidth, 360.0);
+                          }
+                          final density = (panelWidth / 280.0)
+                              .clamp(0.7, 1.05)
+                              .toDouble();
+
+                          return Align(
+                            alignment: Alignment.center,
+                            child: SizedBox(
+                              width: panelWidth,
+                              child: _buildPlayerBanner(
+                                theme,
+                                currentPlayer,
+                                isCompact: true,
+                                density: density,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -492,37 +520,67 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
     ThemeData theme,
     Player currentPlayer, {
     required bool isCompact,
+    double density = 1.0,
   }) {
     final accentColor = currentPlayer.color;
     final isGameOver = _game.isGameOver;
     final winnerName = _game.winner?.name;
+    final scale = density.clamp(0.7, 1.1).toDouble();
+    final horizontalPadding = (isCompact ? 18.0 : 22.0) * scale;
+    final verticalPadding = (isCompact ? 14.0 : 18.0) * scale;
+    final avatarSize = (isCompact ? 48.0 : 56.0) * scale;
+    final gap = (isCompact ? 14.0 : 18.0) * scale;
+    final smallGap = 4.0 * scale.clamp(0.75, 1.2).toDouble();
+    final bannerRadius = (isCompact ? 22.0 : 26.0) * (0.85 + 0.15 * scale);
+    final blurRadius = (isCompact ? 18.0 : 22.0) * (0.75 + 0.25 * scale);
+    final shadowOffsetY = 12.0 * scale.clamp(0.7, 1.0).toDouble();
+
+    final labelBase =
+        theme.textTheme.labelLarge ??
+        const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+    final nameBase =
+        theme.textTheme.headlineSmall ??
+        const TextStyle(fontSize: 24, fontWeight: FontWeight.bold);
+
+    final labelStyle = labelBase.copyWith(
+      color: isCompact ? Colors.white.withValues(alpha: 0.8) : Colors.white70,
+      letterSpacing: 0.8,
+      fontSize: (labelBase.fontSize ?? 14) * scale,
+    );
+    final nameStyle = nameBase.copyWith(
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1,
+      fontSize: (nameBase.fontSize ?? 24) * scale,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: isCompact
             ? Colors.black.withValues(alpha: 0.28)
             : Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(isCompact ? 22 : 26),
+        borderRadius: BorderRadius.circular(bannerRadius),
         border: Border.all(
           color: accentColor.withValues(alpha: isCompact ? 0.4 : 0.5),
         ),
         boxShadow: [
           BoxShadow(
             color: accentColor.withValues(alpha: isCompact ? 0.18 : 0.28),
-            blurRadius: isCompact ? 18 : 22,
-            offset: const Offset(0, 12),
+            blurRadius: blurRadius,
+            offset: Offset(0, shadowOffsetY),
           ),
         ],
       ),
       child: Padding(
-        padding: isCompact
-            ? const EdgeInsets.symmetric(horizontal: 18, vertical: 14)
-            : const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
         child: Row(
           children: [
             Container(
-              width: isCompact ? 48 : 56,
-              height: isCompact ? 48 : 56,
+              width: avatarSize,
+              height: avatarSize,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -533,42 +591,36 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                 boxShadow: [
                   BoxShadow(
                     color: accentColor.withValues(alpha: 0.38),
-                    blurRadius: isCompact ? 12 : 16,
-                    offset: const Offset(0, 8),
+                    blurRadius: (isCompact ? 12.0 : 16.0) * scale,
+                    offset: Offset(0, 8.0 * scale.clamp(0.7, 1.0).toDouble()),
                   ),
                 ],
               ),
             ),
-            SizedBox(width: isCompact ? 14 : 18),
+            SizedBox(width: gap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     isGameOver ? 'Partida encerrada' : 'Jogador atual',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: isCompact
-                          ? Colors.white.withValues(alpha: 0.8)
-                          : Colors.white70,
-                      letterSpacing: 0.8,
-                    ),
+                    style: labelStyle,
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: smallGap),
                   Text(
                     isGameOver
                         ? (winnerName ?? currentPlayer.name)
                         : currentPlayer.name,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
-                    ),
+                    style: nameStyle,
                   ),
                 ],
               ),
             ),
-            SizedBox(width: isCompact ? 14 : 18),
-            _WallsCounter(wallsRemaining: currentPlayer.wallsRemaining),
+            SizedBox(width: gap),
+            _WallsCounter(
+              wallsRemaining: currentPlayer.wallsRemaining,
+              density: scale,
+            ),
           ],
         ),
       ),
@@ -577,31 +629,51 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
 }
 
 class _WallsCounter extends StatelessWidget {
-  const _WallsCounter({required this.wallsRemaining});
+  const _WallsCounter({required this.wallsRemaining, required this.density});
 
   final int wallsRemaining;
+  final double density;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scale = density.clamp(0.7, 1.1).toDouble();
+    final padding = EdgeInsets.symmetric(
+      horizontal: 18.0 * scale,
+      vertical: 12.0 * scale,
+    );
+    final radius = BorderRadius.circular(18.0 * (0.85 + 0.15 * scale));
+    final labelBase =
+        theme.textTheme.labelMedium ??
+        const TextStyle(fontSize: 13, fontWeight: FontWeight.w500);
+    final countBase =
+        theme.textTheme.headlineSmall ??
+        const TextStyle(fontSize: 24, fontWeight: FontWeight.bold);
+
+    final labelStyle = labelBase.copyWith(
+      color: Colors.white70,
+      letterSpacing: 0.6,
+      fontSize: (labelBase.fontSize ?? 13) * scale,
+    );
+    final countStyle = countBase.copyWith(
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1.2,
+      fontSize: (countBase.fontSize ?? 24) * scale,
+    );
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      padding: padding,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: radius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            'Barreiras',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: Colors.white70,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const SizedBox(height: 4),
+          Text('Barreiras', style: labelStyle),
+          SizedBox(height: 4.0 * scale.clamp(0.75, 1.2).toDouble()),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 240),
             transitionBuilder: (child, animation) => ScaleTransition(
@@ -614,11 +686,7 @@ class _WallsCounter extends StatelessWidget {
             child: Text(
               '$wallsRemaining',
               key: ValueKey<int>(wallsRemaining),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
+              style: countStyle,
             ),
           ),
         ],
