@@ -403,19 +403,19 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
             builder: (context, constraints) {
               final isPortrait = constraints.maxHeight >= constraints.maxWidth;
 
-              final board = QuoridorBoard(
-                game: _game,
-                highlightedCells: _highlightedCells,
-                highlightedWalls: _highlightedWalls,
-                onCellTap: _handleCellTap,
-                currentPlayerColor: currentPlayer.color,
-                previewWall: _previewWallPlacement,
-                onWallPreview: _handleWallPreview,
-                onWallCommit: _handleWallCommit,
-                onWallPreviewCancel: _handleWallPreviewCancel,
-                allowCellInteraction:
+              final tabuleiro = TabuleiroQuoridor(
+                jogo: _game,
+                casasDestacadas: _highlightedCells,
+                paredesDestacadas: _highlightedWalls,
+                aoToqueEmCasa: _handleCellTap,
+                corJogadorAtual: currentPlayer.color,
+                paredeEmPreVisualizacao: _previewWallPlacement,
+                aoPreVisualizarParede: _handleWallPreview,
+                aoConfirmarParede: _handleWallCommit,
+                aoCancelarPreVisualizacao: _handleWallPreviewCancel,
+                permitirInteracaoCasas:
                     !_game.currentPlayer.isBot && !_game.isGameOver,
-                allowWallInteraction:
+                permitirInteracaoParedes:
                     !_game.currentPlayer.isBot &&
                     _game.currentPlayer.hasWallsAvailable &&
                     !_game.isGameOver,
@@ -435,7 +435,7 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Center(child: board),
+                        child: Center(child: tabuleiro),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -467,7 +467,7 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                             child: SizedBox(
                               width: boardSize,
                               height: boardSize,
-                              child: board,
+                              child: tabuleiro,
                             ),
                           );
                         },
