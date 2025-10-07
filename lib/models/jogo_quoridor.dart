@@ -1,7 +1,5 @@
 import 'dart:collection';
-
 import 'package:flutter/material.dart';
-
 import 'jogador.dart';
 import 'parede.dart';
 import 'posicao.dart';

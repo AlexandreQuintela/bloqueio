@@ -119,7 +119,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                               },
                             ),
                             ChoiceChip(
-                              label: const Text('Jogador vs celular'),
+                              label: const Text('Jogador vs IA'),
                               selected: _selectedMode == GameMode.vsPhone,
                               onSelected: (_) {
                                 setState(() {
@@ -128,7 +128,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                               },
                             ),
                           ChoiceChip(
-                            label: const Text('Celular com 3 jogadores'),
+                            label: const Text('IA vs 3 jogadores'),
                             selected: _selectedMode == GameMode.threePlayers,
                             onSelected: (_) {
                               setState(() {

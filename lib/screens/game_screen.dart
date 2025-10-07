@@ -2,10 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/player.dart';
-import '../models/position.dart';
-import '../models/quoridor_game.dart';
-import '../models/wall.dart';
+import '../models/jogador.dart';
+import '../models/posicao.dart';
+import '../models/jogo_quoridor.dart';
+import '../models/parede.dart';
 import '../widgets/quoridor_board.dart';
 
 class QuoridorGameScreen extends StatefulWidget {
@@ -23,37 +23,39 @@ class QuoridorGameScreen extends StatefulWidget {
 }
 
 class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
-  late QuoridorGame _game;
-  Set<Position> _highlightedCells = <Position>{};
-  Set<WallPlacement> _highlightedWalls = <WallPlacement>{};
-  WallPlacement? _previewWallPlacement;
+  late JogoQuoridor _game;
+  Set<Posicao> _highlightedCells = <Posicao>{};
+  Set<PosicionamentoParede> _highlightedWalls = <PosicionamentoParede>{};
+  PosicionamentoParede? _previewWallPlacement;
   bool _showingWinnerDialog = false;
 
   @override
   void initState() {
     super.initState();
-    _game = QuoridorGame(
-      playerCount: widget.playerCount,
-      botPlayerIds: widget.botPlayerIds,
+    _game = JogoQuoridor(
+      quantidadeJogadores: widget.playerCount,
+      idsBots: widget.botPlayerIds,
     );
     _refreshHighlights();
     _scheduleBotTurn();
   }
 
   void _refreshHighlights() {
-    if (_game.isGameOver) {
-      _highlightedCells = <Position>{};
-      _highlightedWalls = <WallPlacement>{};
+    if (_game.jogoEncerrado) {
+      _highlightedCells = <Posicao>{};
+      _highlightedWalls = <PosicionamentoParede>{};
       _previewWallPlacement = null;
       return;
     }
-    _highlightedCells = _game.legalMovesForPlayer(_game.currentPlayer).toSet();
-    if (_game.currentPlayer.hasWallsAvailable) {
-      final horizontal = _game.legalWallPlacements(WallOrientation.horizontal);
-      final vertical = _game.legalWallPlacements(WallOrientation.vertical);
-      _highlightedWalls = <WallPlacement>{...horizontal, ...vertical};
+    _highlightedCells = _game.movimentosLegaisPara(_game.jogadorAtual).toSet();
+    if (_game.jogadorAtual.possuiParedesDisponiveis) {
+      final horizontais = _game.posicionamentosLegais(
+        OrientacaoParede.horizontal,
+      );
+      final verticais = _game.posicionamentosLegais(OrientacaoParede.vertical);
+      _highlightedWalls = <PosicionamentoParede>{...horizontais, ...verticais};
     } else {
-      _highlightedWalls = <WallPlacement>{};
+      _highlightedWalls = <PosicionamentoParede>{};
     }
     if (_previewWallPlacement != null &&
         !_highlightedWalls.contains(_previewWallPlacement)) {
@@ -62,16 +64,18 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
   }
 
   void _scheduleBotTurn() {
-    if (!mounted || _game.isGameOver) {
+    if (!mounted || _game.jogoEncerrado) {
       return;
     }
-    final current = _game.currentPlayer;
-    if (!current.isBot) {
+    final current = _game.jogadorAtual;
+    if (!current.ehAutomatizado) {
       return;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _game.isGameOver || !_game.currentPlayer.isBot) {
+      if (!mounted ||
+          _game.jogoEncerrado ||
+          !_game.jogadorAtual.ehAutomatizado) {
         return;
       }
       _performBotTurn();
@@ -79,16 +83,16 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
   }
 
   Future<void> _performBotTurn() async {
-    final bot = _game.currentPlayer;
-    if (!bot.isBot || _game.isGameOver) {
+    final bot = _game.jogadorAtual;
+    if (!bot.ehAutomatizado || _game.jogoEncerrado) {
       return;
     }
 
     await Future<void>.delayed(const Duration(milliseconds: 420));
 
-    if (bot.hasWallsAvailable) {
-      final placedWall = _attemptBotWall(bot);
-      if (placedWall) {
+    if (bot.possuiParedesDisponiveis) {
+      final posicionouParede = _attemptBotWall(bot);
+      if (posicionouParede) {
         if (!mounted) {
           return;
         }
@@ -98,57 +102,55 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
       }
     }
 
-    final moves = _game.legalMovesForPlayer(bot);
-    if (moves.isEmpty) {
+    final movimentos = _game.movimentosLegaisPara(bot);
+    if (movimentos.isEmpty) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _refreshHighlights();
-      });
+      setState(_refreshHighlights);
       _scheduleBotTurn();
       return;
     }
 
-    Position? target;
-    final plannedPath = _game.shortestPathToGoal(bot);
-    if (plannedPath.length > 1) {
-      final nextStep = plannedPath[1];
-      if (moves.contains(nextStep)) {
-        target = nextStep;
+    Posicao? alvo;
+    final caminhoPlanejado = _game.menorCaminhoParaMeta(bot);
+    if (caminhoPlanejado.length > 1) {
+      final proximoPasso = caminhoPlanejado[1];
+      if (movimentos.contains(proximoPasso)) {
+        alvo = proximoPasso;
       }
     }
 
-    if (target == null) {
-      final originalPosition = bot.position;
-      var bestScore = 1 << 20;
-      var bestCenter = 1 << 20;
-      for (final move in moves) {
-        bot.position = move;
-        final futurePath = _game.shortestPathToGoal(bot);
-        bot.position = originalPosition;
-        final score = futurePath.length;
-        final centerScore = _centerScore(move);
-        if (score < bestScore ||
-            (score == bestScore && centerScore < bestCenter)) {
-          bestScore = score;
-          bestCenter = centerScore;
-          target = move;
+    if (alvo == null) {
+      final posicaoOriginal = bot.posicaoAtual;
+      var melhorPontuacao = 1 << 20;
+      var melhorCentro = 1 << 20;
+      for (final movimento in movimentos) {
+        bot.moverPara(movimento);
+        final caminhoFuturo = _game.menorCaminhoParaMeta(bot);
+        bot.moverPara(posicaoOriginal);
+        final pontuacao = caminhoFuturo.length;
+        final pontuacaoCentro = _centerScore(movimento);
+        if (pontuacao < melhorPontuacao ||
+            (pontuacao == melhorPontuacao && pontuacaoCentro < melhorCentro)) {
+          melhorPontuacao = pontuacao;
+          melhorCentro = pontuacaoCentro;
+          alvo = movimento;
         }
       }
-      bot.position = originalPosition;
+      bot.moverPara(posicaoOriginal);
     }
 
-    final chosenTarget = target ?? _chooseBotMove(bot, moves);
+    final destinoEscolhido = alvo ?? _chooseBotMove(bot, movimentos);
 
-    var moved = _game.moveCurrentPlayer(chosenTarget);
-    if (!moved) {
-      for (final fallback in moves) {
-        if (fallback == chosenTarget) {
+    var movimentou = _game.moverJogadorAtual(destinoEscolhido);
+    if (!movimentou) {
+      for (final alternativa in movimentos) {
+        if (alternativa == destinoEscolhido) {
           continue;
         }
-        if (_game.moveCurrentPlayer(fallback)) {
-          moved = true;
+        if (_game.moverJogadorAtual(alternativa)) {
+          movimentou = true;
           break;
         }
       }
@@ -163,30 +165,30 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
     _scheduleBotTurn();
   }
 
-  bool _attemptBotWall(Player bot) {
-    final opponents = _game.players
+  bool _attemptBotWall(Jogador bot) {
+    final opponents = _game.jogadores
         .where((player) => !identical(player, bot))
         .toList();
     if (opponents.isEmpty) {
       return false;
     }
 
-    final myPathLength = _game.shortestPathToGoal(bot).length;
-    final opponentPaths = <Player, int>{
+    final myPathLength = _game.menorCaminhoParaMeta(bot).length;
+    final opponentPaths = <Jogador, int>{
       for (final opponent in opponents)
-        opponent: _game.shortestPathToGoal(opponent).length,
+        opponent: _game.menorCaminhoParaMeta(opponent).length,
     };
 
-    final candidates = <WallPlacement>[
-      ..._game.legalWallPlacements(WallOrientation.horizontal),
-      ..._game.legalWallPlacements(WallOrientation.vertical),
+    final candidates = <PosicionamentoParede>[
+      ..._game.posicionamentosLegais(OrientacaoParede.horizontal),
+      ..._game.posicionamentosLegais(OrientacaoParede.vertical),
     ];
 
-    WallPlacement? bestPlacement;
+    PosicionamentoParede? bestPlacement;
     var bestScore = 0;
 
     for (final placement in candidates) {
-      final botPathAfter = _game.pathLengthWithWall(bot, placement);
+      final botPathAfter = _game.comprimentoCaminhoComParede(bot, placement);
       final selfPenalty = botPathAfter - myPathLength;
       if (selfPenalty > 1) {
         continue;
@@ -199,7 +201,10 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
         if (originalLen > myPathLength + 1) {
           continue;
         }
-        final projected = _game.pathLengthWithWall(opponent, placement);
+        final projected = _game.comprimentoCaminhoComParede(
+          opponent,
+          placement,
+        );
         final gain = projected - originalLen;
         if (gain > 0) {
           affectsThreat = true;
@@ -221,18 +226,18 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
     }
 
     if (bestPlacement != null && bestScore > 0) {
-      return _game.placeWallForCurrentPlayer(bestPlacement);
+      return _game.posicionarParedeParaJogadorAtual(bestPlacement);
     }
     return false;
   }
 
-  Position _chooseBotMove(Player bot, List<Position> moves) {
+  Posicao _chooseBotMove(Jogador bot, List<Posicao> moves) {
     var best = moves.first;
-    var bestScore = _goalDistance(best, bot.goalSide);
+    var bestScore = _goalDistance(best, bot.ladoMeta);
     var bestCenter = _centerScore(best);
 
     for (final candidate in moves.skip(1)) {
-      final distance = _goalDistance(candidate, bot.goalSide);
+      final distance = _goalDistance(candidate, bot.ladoMeta);
       final center = _centerScore(candidate);
       if (distance < bestScore ||
           (distance == bestScore && center < bestCenter)) {
@@ -244,31 +249,31 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
     return best;
   }
 
-  int _goalDistance(Position position, GoalSide goal) {
+  int _goalDistance(Posicao position, LadoMeta goal) {
     switch (goal) {
-      case GoalSide.north:
-        return position.row;
-      case GoalSide.south:
-        return _game.boardSize - 1 - position.row;
-      case GoalSide.east:
-        return _game.boardSize - 1 - position.col;
-      case GoalSide.west:
-        return position.col;
+      case LadoMeta.norte:
+        return position.linha;
+      case LadoMeta.sul:
+        return _game.tamanhoTabuleiro - 1 - position.linha;
+      case LadoMeta.leste:
+        return _game.tamanhoTabuleiro - 1 - position.coluna;
+      case LadoMeta.oeste:
+        return position.coluna;
     }
   }
 
-  int _centerScore(Position position) {
-    final center = (_game.boardSize - 1) / 2;
-    final dRow = (position.row - center).abs();
-    final dCol = (position.col - center).abs();
+  int _centerScore(Posicao position) {
+    final center = (_game.tamanhoTabuleiro - 1) / 2;
+    final dRow = (position.linha - center).abs();
+    final dCol = (position.coluna - center).abs();
     return (dRow + dCol).round();
   }
 
-  void _handleCellTap(Position position) {
-    if (_game.currentPlayer.isBot) {
+  void _handleCellTap(Posicao position) {
+    if (_game.jogadorAtual.ehAutomatizado) {
       return;
     }
-    final moved = _game.moveCurrentPlayer(position);
+    final moved = _game.moverJogadorAtual(position);
     if (!moved) {
       _showFeedback('Movimento inválido nessa rodada.');
       return;
@@ -281,17 +286,15 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
     _scheduleBotTurn();
   }
 
-  void _handleWallPreview(WallPlacement placement) {
-    if (_game.currentPlayer.isBot || _game.isGameOver) {
+  void _handleWallPreview(PosicionamentoParede placement) {
+    if (_game.jogadorAtual.ehAutomatizado || _game.jogoEncerrado) {
       return;
     }
     if (_previewWallPlacement == placement) {
       return;
     }
     setState(() {
-      _previewWallPlacement = placement.copyWith(
-        color: _game.currentPlayer.color,
-      );
+      _previewWallPlacement = placement.copiarCom(cor: _game.jogadorAtual.cor);
     });
   }
 
@@ -304,14 +307,12 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
     });
   }
 
-  void _handleWallCommit(WallPlacement placement) {
-    if (_game.currentPlayer.isBot) {
+  void _handleWallCommit(PosicionamentoParede placement) {
+    if (_game.jogadorAtual.ehAutomatizado) {
       return;
     }
-    final coloredPlacement = placement.copyWith(
-      color: _game.currentPlayer.color,
-    );
-    final placed = _game.placeWallForCurrentPlayer(coloredPlacement);
+    final coloredPlacement = placement.copiarCom(cor: _game.jogadorAtual.cor);
+    final placed = _game.posicionarParedeParaJogadorAtual(coloredPlacement);
     if (!placed) {
       setState(() {
         _previewWallPlacement = null;
@@ -335,7 +336,7 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
   }
 
   void _maybeShowWinnerDialog() {
-    if (!_game.isGameOver || _showingWinnerDialog) {
+    if (!_game.jogoEncerrado || _showingWinnerDialog) {
       return;
     }
     _showingWinnerDialog = true;
@@ -344,12 +345,12 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
         context: context,
         barrierDismissible: false,
         builder: (context) {
-          final winner = _game.winner;
+          final winner = _game.vencedor;
           return AlertDialog(
             title: const Text('Fim de jogo!'),
             content: Text(
               winner != null
-                  ? '${winner.name} chegou ao objetivo e venceu!'
+                  ? '${winner.nome} chegou ao objetivo e venceu!'
                   : 'Fim de jogo.',
             ),
             actions: [
@@ -357,7 +358,7 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   setState(() {
-                    _game.resetToInitialState();
+                    _game.reiniciar();
                     _refreshHighlights();
                   });
                   _showingWinnerDialog = false;
@@ -387,7 +388,7 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currentPlayer = _game.currentPlayer;
+    final currentPlayer = _game.jogadorAtual;
 
     return Scaffold(
       body: Container(
@@ -408,17 +409,17 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                 casasDestacadas: _highlightedCells,
                 paredesDestacadas: _highlightedWalls,
                 aoToqueEmCasa: _handleCellTap,
-                corJogadorAtual: currentPlayer.color,
+                corJogadorAtual: currentPlayer.cor,
                 paredeEmPreVisualizacao: _previewWallPlacement,
                 aoPreVisualizarParede: _handleWallPreview,
                 aoConfirmarParede: _handleWallCommit,
                 aoCancelarPreVisualizacao: _handleWallPreviewCancel,
                 permitirInteracaoCasas:
-                    !_game.currentPlayer.isBot && !_game.isGameOver,
+                    !_game.jogadorAtual.ehAutomatizado && !_game.jogoEncerrado,
                 permitirInteracaoParedes:
-                    !_game.currentPlayer.isBot &&
-                    _game.currentPlayer.hasWallsAvailable &&
-                    !_game.isGameOver,
+                    !_game.jogadorAtual.ehAutomatizado &&
+                    _game.jogadorAtual.possuiParedesDisponiveis &&
+                    !_game.jogoEncerrado,
               );
 
               if (isPortrait) {
@@ -518,13 +519,13 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
 
   Widget _buildPlayerBanner(
     ThemeData theme,
-    Player currentPlayer, {
+    Jogador currentPlayer, {
     required bool isCompact,
     double density = 1.0,
   }) {
-    final accentColor = currentPlayer.color;
-    final isGameOver = _game.isGameOver;
-    final winnerName = _game.winner?.name;
+    final accentColor = currentPlayer.cor;
+    final isGameOver = _game.jogoEncerrado;
+    final winnerName = _game.vencedor?.nome;
     final scale = density.clamp(0.7, 1.1).toDouble();
     final horizontalPadding = (isCompact ? 18.0 : 22.0) * scale;
     final verticalPadding = (isCompact ? 14.0 : 18.0) * scale;
@@ -609,16 +610,16 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
                   SizedBox(height: smallGap),
                   Text(
                     isGameOver
-                        ? (winnerName ?? currentPlayer.name)
-                        : currentPlayer.name,
+                        ? (winnerName ?? currentPlayer.nome)
+                        : currentPlayer.nome,
                     style: nameStyle,
                   ),
                 ],
               ),
             ),
             SizedBox(width: gap),
-            _WallsCounter(
-              wallsRemaining: currentPlayer.wallsRemaining,
+            _IndicadorParedes(
+              paredesRestantes: currentPlayer.paredesRestantes,
               density: scale,
             ),
           ],
@@ -628,10 +629,13 @@ class _QuoridorGameScreenState extends State<QuoridorGameScreen> {
   }
 }
 
-class _WallsCounter extends StatelessWidget {
-  const _WallsCounter({required this.wallsRemaining, required this.density});
+class _IndicadorParedes extends StatelessWidget {
+  const _IndicadorParedes({
+    required this.paredesRestantes,
+    required this.density,
+  });
 
-  final int wallsRemaining;
+  final int paredesRestantes;
   final double density;
 
   @override
@@ -684,8 +688,8 @@ class _WallsCounter extends StatelessWidget {
               child: child,
             ),
             child: Text(
-              '$wallsRemaining',
-              key: ValueKey<int>(wallsRemaining),
+              '$paredesRestantes',
+              key: ValueKey<int>(paredesRestantes),
               style: countStyle,
             ),
           ),

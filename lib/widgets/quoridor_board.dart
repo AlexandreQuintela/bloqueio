@@ -2,10 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/position.dart';
-import '../models/quoridor_game.dart';
-import '../models/wall.dart';
-import '../models/player.dart';
+import '../models/posicao.dart';
+import '../models/jogo_quoridor.dart';
+import '../models/parede.dart';
 
 /// Widget responsável por renderizar o tabuleiro do Quoridor com destaques,
 /// pré-visualizações de paredes e peões dos jogadores.
@@ -29,7 +28,12 @@ class TabuleiroQuoridor extends StatelessWidget {
   static const Color _corBaseTabuleiro = Color(0xFF0C1D3B);
   static const Color _corAcentoTabuleiro = Color(0xFF2A7BFF);
   static const Color _corGradienteExternoInicio = Color(0xFF1E3C72);
-  static const Color _corGradienteExternoFim = Color(0xFF2A5298);
+  static const Color _corGradienteExternoFim = Color.fromARGB(
+    255,
+    152,
+    42,
+    101,
+  );
   static const Color _corParedePadrao = Color(0xFFD4A373);
   static const List<BoxShadow> _sombrasTabuleiro = <BoxShadow>[
     BoxShadow(color: Colors.black54, blurRadius: 18, offset: Offset(0, 12)),
@@ -102,16 +106,17 @@ class TabuleiroQuoridor extends StatelessWidget {
   static const Duration _duracaoAnimacaoParede = Duration(milliseconds: 120);
   static const Duration _duracaoAnimacaoPeao = Duration(milliseconds: 250);
 
-  final QuoridorGame jogo;
-  final Set<Position> casasDestacadas;
-  final Set<WallPlacement> paredesDestacadas;
-  final void Function(Position posicao) aoToqueEmCasa;
+  final JogoQuoridor jogo;
+  final Set<Posicao> casasDestacadas;
+  final Set<PosicionamentoParede> paredesDestacadas;
+  final void Function(Posicao posicao) aoToqueEmCasa;
 
   /// Cor informativa do jogador atual (disponível para personalizações futuras).
   final Color corJogadorAtual;
-  final WallPlacement? paredeEmPreVisualizacao;
-  final void Function(WallPlacement posicionamento)? aoPreVisualizarParede;
-  final void Function(WallPlacement posicionamento)? aoConfirmarParede;
+  final PosicionamentoParede? paredeEmPreVisualizacao;
+  final void Function(PosicionamentoParede posicionamento)?
+  aoPreVisualizarParede;
+  final void Function(PosicionamentoParede posicionamento)? aoConfirmarParede;
   final VoidCallback? aoCancelarPreVisualizacao;
   final bool permitirInteracaoCasas;
   final bool permitirInteracaoParedes;
@@ -127,7 +132,7 @@ class TabuleiroQuoridor extends StatelessWidget {
             constraints.maxHeight,
           );
           final padding = tamanhoDisponivel * _proporcaoPadding;
-          final quantidadeCasas = jogo.boardSize;
+          final quantidadeCasas = jogo.tamanhoTabuleiro;
           final areaUtil = tamanhoDisponivel - padding * 2;
           final gap =
               areaUtil * _proporcaoGap / (quantidadeCasas - 1).clamp(1, 9);
@@ -167,12 +172,6 @@ class TabuleiroQuoridor extends StatelessWidget {
                     tamanhoCasa: tamanhoCasa,
                     gap: gap,
                   ),
-                  _construirDestaquesParede(
-                    padding: padding,
-                    tamanhoCasa: tamanhoCasa,
-                    gap: gap,
-                    espessuraParede: espessuraParede,
-                  ),
                   _construirParedes(
                     padding: padding,
                     tamanhoCasa: tamanhoCasa,
@@ -183,6 +182,12 @@ class TabuleiroQuoridor extends StatelessWidget {
                     padding: padding,
                     tamanhoCasa: tamanhoCasa,
                     gap: gap,
+                  ),
+                  _construirDestaquesParede(
+                    padding: padding,
+                    tamanhoCasa: tamanhoCasa,
+                    gap: gap,
+                    espessuraParede: espessuraParede,
                   ),
                 ],
               ),
@@ -211,9 +216,9 @@ class TabuleiroQuoridor extends StatelessWidget {
       alpha: _alphaBordaCasaDestacada,
     );
 
-    for (var linha = 0; linha < jogo.boardSize; linha++) {
-      for (var coluna = 0; coluna < jogo.boardSize; coluna++) {
-        final posicao = Position(linha, coluna);
+    for (var linha = 0; linha < jogo.tamanhoTabuleiro; linha++) {
+      for (var coluna = 0; coluna < jogo.tamanhoTabuleiro; coluna++) {
+        final posicao = Posicao(linha, coluna);
         final deslocamentoEsquerda = padding + coluna * (tamanhoCasa + gap);
         final deslocamentoTopo = padding + linha * (tamanhoCasa + gap);
         final estaDestacada = casasDestacadas.contains(posicao);
@@ -275,8 +280,9 @@ class TabuleiroQuoridor extends StatelessWidget {
 
     final destaques = <Widget>[];
     for (final posicao in casasDestacadas) {
-      final deslocamentoEsquerda = padding + posicao.col * (tamanhoCasa + gap);
-      final deslocamentoTopo = padding + posicao.row * (tamanhoCasa + gap);
+      final deslocamentoEsquerda =
+          padding + posicao.coluna * (tamanhoCasa + gap);
+      final deslocamentoTopo = padding + posicao.linha * (tamanhoCasa + gap);
 
       destaques.add(
         Positioned(
@@ -303,7 +309,7 @@ class TabuleiroQuoridor extends StatelessWidget {
         ),
       );
     }
-    return Stack(children: destaques);
+    return Stack(clipBehavior: Clip.none, children: destaques);
   }
 
   /// Renderiza as paredes já posicionadas no tabuleiro.
@@ -315,33 +321,43 @@ class TabuleiroQuoridor extends StatelessWidget {
   }) {
     final paredes = <Widget>[];
 
-    for (final parede in jogo.horizontalWalls) {
-      final deslocamentoEsquerda = padding + parede.col * (tamanhoCasa + gap);
+    final ajusteMetadeEspessura = espessuraParede / 2;
+
+    for (final parede in jogo.paredesHorizontais) {
+      final deslocamentoEsquerda =
+          padding + parede.coluna * (tamanhoCasa + gap) - ajusteMetadeEspessura;
       final deslocamentoTopo =
-          padding + parede.row * (tamanhoCasa + gap) + tamanhoCasa;
+          padding +
+          parede.linha * (tamanhoCasa + gap) +
+          tamanhoCasa -
+          ajusteMetadeEspessura;
       paredes.add(
         _construirPecaParede(
           deslocamentoEsquerda: deslocamentoEsquerda,
           deslocamentoTopo: deslocamentoTopo,
-          largura: tamanhoCasa * 2 + gap,
+          largura: tamanhoCasa * 2 + gap + espessuraParede,
           altura: espessuraParede,
-          cor: parede.color ?? _corParedePadrao,
+          cor: parede.cor ?? _corParedePadrao,
           ehHorizontal: true,
         ),
       );
     }
 
-    for (final parede in jogo.verticalWalls) {
+    for (final parede in jogo.paredesVerticais) {
       final deslocamentoEsquerda =
-          padding + parede.col * (tamanhoCasa + gap) + tamanhoCasa;
-      final deslocamentoTopo = padding + parede.row * (tamanhoCasa + gap);
+          padding +
+          parede.coluna * (tamanhoCasa + gap) +
+          tamanhoCasa -
+          ajusteMetadeEspessura;
+      final deslocamentoTopo =
+          padding + parede.linha * (tamanhoCasa + gap) - ajusteMetadeEspessura;
       paredes.add(
         _construirPecaParede(
           deslocamentoEsquerda: deslocamentoEsquerda,
           deslocamentoTopo: deslocamentoTopo,
           largura: espessuraParede,
-          altura: tamanhoCasa * 2 + gap,
-          cor: parede.color ?? _corParedePadrao,
+          altura: tamanhoCasa * 2 + gap + espessuraParede,
+          cor: parede.cor ?? _corParedePadrao,
           ehHorizontal: false,
         ),
       );
@@ -365,24 +381,36 @@ class TabuleiroQuoridor extends StatelessWidget {
 
     for (final posicionamento in paredesDestacadas) {
       final ehHorizontal =
-          posicionamento.orientation == WallOrientation.horizontal;
-      final deslocamentoEsquerda =
-          padding +
-          posicionamento.col * (tamanhoCasa + gap) +
-          (ehHorizontal ? 0 : tamanhoCasa);
-      final deslocamentoTopo =
-          padding +
-          posicionamento.row * (tamanhoCasa + gap) +
-          (ehHorizontal ? tamanhoCasa : 0);
-      final largura = ehHorizontal ? tamanhoCasa * 2 + gap : espessuraParede;
-      final altura = ehHorizontal ? espessuraParede : tamanhoCasa * 2 + gap;
+          posicionamento.orientacao == OrientacaoParede.horizontal;
+      final deslocamentoEsquerdaBase = ehHorizontal
+          ? padding +
+                posicionamento.coluna * (tamanhoCasa + gap) -
+                espessuraParede / 2
+          : padding +
+                posicionamento.coluna * (tamanhoCasa + gap) +
+                tamanhoCasa -
+                espessuraParede / 2;
+      final deslocamentoTopoBase = ehHorizontal
+          ? padding +
+                posicionamento.linha * (tamanhoCasa + gap) +
+                tamanhoCasa -
+                espessuraParede / 2
+          : padding +
+                posicionamento.linha * (tamanhoCasa + gap) -
+                espessuraParede / 2;
+      final larguraBase = ehHorizontal
+          ? tamanhoCasa * 2 + gap + espessuraParede
+          : espessuraParede;
+      final alturaBase = ehHorizontal
+          ? espessuraParede
+          : tamanhoCasa * 2 + gap + espessuraParede;
       final expansao = tamanhoCasa * _fatorExpansaoAreaParede;
-      final larguraExtra = ehHorizontal ? 0.0 : expansao;
-      final alturaExtra = ehHorizontal ? expansao : 0.0;
-      final alcanceEsquerda = deslocamentoEsquerda - larguraExtra / 2;
-      final alcanceTopo = deslocamentoTopo - alturaExtra / 2;
-      final alcanceLargura = largura + larguraExtra;
-      final alcanceAltura = altura + alturaExtra;
+      final larguraExtra = ehHorizontal ? expansao : expansao;
+      final alturaExtra = ehHorizontal ? expansao : expansao;
+      final alcanceEsquerda = deslocamentoEsquerdaBase - larguraExtra / 2;
+      final alcanceTopo = deslocamentoTopoBase - alturaExtra / 2;
+      final alcanceLargura = larguraBase + larguraExtra;
+      final alcanceAltura = alturaBase + alturaExtra;
 
       destaques.add(
         Positioned(
@@ -407,8 +435,8 @@ class TabuleiroQuoridor extends StatelessWidget {
                 : null,
             child: Center(
               child: SizedBox(
-                width: largura,
-                height: altura,
+                width: larguraBase,
+                height: alturaBase,
                 child: _DestaqueParede(
                   ehHorizontal: ehHorizontal,
                   estaPreVisualizando:
@@ -432,14 +460,14 @@ class TabuleiroQuoridor extends StatelessWidget {
   }) {
     final peoes = <Widget>[];
 
-    for (final jogador in jogo.players) {
-      final posicao = jogador.position;
+    for (final jogador in jogo.jogadores) {
+      final posicao = jogador.posicaoAtual;
       final deslocamentoEsquerda =
-          padding + posicao.col * (tamanhoCasa + gap) + tamanhoCasa / 2;
+          padding + posicao.coluna * (tamanhoCasa + gap) + tamanhoCasa / 2;
       final deslocamentoTopo =
-          padding + posicao.row * (tamanhoCasa + gap) + tamanhoCasa / 2;
+          padding + posicao.linha * (tamanhoCasa + gap) + tamanhoCasa / 2;
       final ehJogadorAtual =
-          identical(jogador, jogo.currentPlayer) && !jogo.isGameOver;
+          identical(jogador, jogo.jogadorAtual) && !jogo.jogoEncerrado;
       final blur = ehJogadorAtual ? _blurPeaoAtual : _blurPeaoInativo;
       final spread = ehJogadorAtual ? _spreadPeaoAtual : _spreadPeaoInativo;
       final alphaBorda = ehJogadorAtual
@@ -459,10 +487,10 @@ class TabuleiroQuoridor extends StatelessWidget {
             duration: _duracaoAnimacaoPeao,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: jogador.color,
+              color: jogador.cor,
               boxShadow: [
                 BoxShadow(
-                  color: jogador.color.withValues(alpha: _alphaSombraPeao),
+                  color: jogador.cor.withValues(alpha: _alphaSombraPeao),
                   blurRadius: blur,
                   spreadRadius: spread,
                 ),
